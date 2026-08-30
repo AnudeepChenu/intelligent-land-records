@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
-import { FileCheck, Download, Edit3, Eye, FileText, CheckCircle2 } from 'lucide-react';
+import { FileCheck, Download, Edit3, Eye, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
 import jsPDF from 'jspdf';
 
 export default function VerifiedDataPage() {
@@ -11,18 +11,14 @@ export default function VerifiedDataPage() {
   const [selectedDoc, setSelectedDoc] = useState<any | null>(null);
   const [processing, setProcessing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  
+  // NEW: State to hold the AI's word-by-word confidence scores
+  const [confidenceData, setConfidenceData] = useState<{text: string, confidence: number}[]>([]);
 
   // Editable Form State
   const [formData, setFormData] = useState({
-    regNo: '',
-    date: '',
-    district: '',
-    mandal: '',
-    village: '',
-    surveyNo: '',
-    extent: '',
-    owner: '',
-    khata: ''
+    regNo: '', date: '', district: '', mandal: '', village: '', 
+    surveyNo: '', extent: '', owner: '', khata: ''
   });
 
   useEffect(() => {
@@ -32,15 +28,12 @@ export default function VerifiedDataPage() {
         .select('*')
         .order('uploaded_at', { ascending: false });
 
-      if (!error && data) {
-        setDocuments(data);
-      }
+      if (!error && data) setDocuments(data);
       setLoading(false);
     }
     fetchDocuments();
   }, []);
 
-  // Simple Frontend Parser to extract fields from the raw OCR paragraph
   const parseExtractedText = (text: string) => {
     if (!text) return;
     const safeMatch = (regex: RegExp) => {
@@ -60,19 +53,16 @@ export default function VerifiedDataPage() {
       khata: safeMatch(/Khata Number:\s*(\d+)/i),
     });
   };
+
   const handleSelectDoc = async (doc: any) => {
     setSelectedDoc(doc);
+    setConfidenceData([]); // Clear previous confidence data
     
-    // Check your Supabase Storage to ensure your bucket is exactly named 'land_records'
-    // Generate a secure temporary URL for the private document (valid for 1 hour)
     const { data, error } = await supabase.storage
       .from('land_records') 
       .createSignedUrl(doc.file_path, 3600);
 
-    if (error) {
-      console.error("Error loading document:", error);
-      alert("Could not load preview. Check if the bucket 'land_records' exists in Supabase.");
-    } else if (data) {
+    if (!error && data) {
       setPreviewUrl(data.signedUrl);
     }
     
@@ -88,11 +78,17 @@ export default function VerifiedDataPage() {
         body: JSON.stringify({ document_id: id }),
       });
       const result = await response.json();
+      
       if (response.ok) {
         setDocuments(documents.map(doc => doc.id === id ? { ...doc, status: 'extracted', extracted_text: result.preview } : doc));
         const updatedDoc = { ...selectedDoc, status: 'extracted', extracted_text: result.preview };
         setSelectedDoc(updatedDoc);
         parseExtractedText(result.preview);
+        
+        // NEW: Store the confidence data from the Python backend
+        if (result.confidence_data) {
+          setConfidenceData(result.confidence_data);
+        }
       } else {
         alert('Extraction failed: ' + result.detail);
       }
@@ -106,7 +102,7 @@ export default function VerifiedDataPage() {
   const handleVerify = async (id: string) => {
     const { error } = await supabase
       .from('documents')
-      .update({ status: 'verified', extracted_text: JSON.stringify(formData) }) // Optionally save the edited JSON back
+      .update({ status: 'verified', extracted_text: JSON.stringify(formData) })
       .eq('id', id);
 
     if (!error) {
@@ -115,34 +111,26 @@ export default function VerifiedDataPage() {
     }
   };
 
-  // Generate Official Certificate PDF using the EDITED form data
   const handleDownloadCertificate = () => {
     const pdf = new jsPDF();
-    
     pdf.setLineWidth(0.5);
     pdf.rect(10, 10, 190, 277);
-    
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(16);
     pdf.text("GOVERNMENT OF TELANGANA", 105, 25, { align: "center" });
-    
     pdf.setFontSize(12);
     pdf.setFont("helvetica", "normal");
     pdf.text("OFFICE OF THE DISTRICT REVENUE AUTHORITY", 105, 33, { align: "center" });
-    
     pdf.setLineWidth(0.2);
     pdf.line(20, 40, 190, 40);
-
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(14);
     pdf.text("OFFICIAL LAND REGISTRY VERIFICATION CERTIFICATE", 105, 55, { align: "center" });
-
     pdf.setFontSize(11);
     pdf.setFont("helvetica", "normal");
     pdf.text(`Verification Status: OFFICIALLY VERIFIED & SIGNED`, 20, 75);
     pdf.text(`Registration No: ${formData.regNo}`, 20, 85);
     pdf.text(`Date of Issue: ${formData.date}`, 20, 95);
-    
     pdf.setFont("helvetica", "bold");
     pdf.text("LAND PARTICULARS:", 20, 115);
     pdf.setFont("helvetica", "normal");
@@ -151,20 +139,17 @@ export default function VerifiedDataPage() {
     pdf.text(`Village: ${formData.village}`, 20, 139);
     pdf.text(`Survey Number: ${formData.surveyNo}`, 20, 146);
     pdf.text(`Total Extent: ${formData.extent}`, 20, 153);
-
     pdf.setFont("helvetica", "bold");
     pdf.text("OWNERSHIP DETAILS:", 20, 173);
     pdf.setFont("helvetica", "normal");
     pdf.text(`Registered Landholder: ${formData.owner}`, 20, 183);
     pdf.text(`Khata Number: ${formData.khata}`, 20, 190);
-
     pdf.setFontSize(10);
     pdf.setFont("helvetica", "bold");
     pdf.text("DIGITALLY SIGNED BY LAND RECORDS AI ENGINE", 20, 240);
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(8);
     pdf.text(`Generated on: ${new Date().toLocaleString()}`, 20, 247);
-
     pdf.save(`Verified_Record_${formData.surveyNo || 'Certificate'}.pdf`);
   };
 
@@ -178,7 +163,7 @@ export default function VerifiedDataPage() {
       <div className="mb-8">
         <h1 className="text-4xl md:text-5xl font-serif text-black tracking-tight mb-2">Record Verification.</h1>
         <p className="text-sm text-slate-500 font-light tracking-wide max-w-2xl">
-          Review document previews side-by-side, edit AI-extracted metadata, and issue official digital sign-offs.
+          Review document previews side-by-side, check AI confidence flags, and issue official digital sign-offs.
         </p>
       </div>
 
@@ -187,7 +172,7 @@ export default function VerifiedDataPage() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[75vh] min-h-[600px]">
           
-          {/* Column 1: Document List (Left) */}
+          {/* Column 1: Document List */}
           <div className="lg:col-span-3 border border-slate-200 bg-white flex flex-col overflow-hidden shadow-sm">
             <div className="p-4 border-b border-slate-100 bg-slate-50">
               <h3 className="text-xs font-bold tracking-widest uppercase text-slate-500">Registry Queue</h3>
@@ -217,7 +202,7 @@ export default function VerifiedDataPage() {
             </div>
           </div>
 
-          {/* Column 2: Document Preview (Middle) */}
+          {/* Column 2: Document Preview */}
           <div className="lg:col-span-5 border border-slate-200 bg-slate-100 flex flex-col shadow-sm">
             <div className="p-4 border-b border-slate-200 bg-white flex justify-between items-center">
               <h3 className="text-xs font-bold tracking-widest uppercase text-slate-500 flex items-center">
@@ -235,69 +220,96 @@ export default function VerifiedDataPage() {
             </div>
           </div>
 
-          {/* Column 3: Extracted Details & Actions (Right) */}
+          {/* Column 3: Extracted Details & Flags */}
           <div className="lg:col-span-4 border border-slate-200 bg-white flex flex-col shadow-sm">
             <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
               <h3 className="text-xs font-bold tracking-widest uppercase text-slate-500 flex items-center">
-                <Edit3 className="w-3 h-3 mr-2" /> Extracted Details
+                <Edit3 className="w-3 h-3 mr-2" /> Verification Panel
               </h3>
             </div>
             
             {selectedDoc ? (
               <div className="flex-1 flex flex-col overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                <div className="flex-1 overflow-y-auto p-0">
                   
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">Registration No.</label>
-                      <input type="text" name="regNo" value={formData.regNo} onChange={handleInputChange} className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none" />
+                  {/* NEW: AI Confidence Flags Section */}
+                  {confidenceData.length > 0 && (
+                    <div className="p-4 bg-amber-50/50 border-b border-amber-100">
+                      <h4 className="text-[10px] font-bold text-amber-800 uppercase tracking-widest mb-2 flex items-center">
+                        <AlertTriangle className="w-3 h-3 mr-1" /> OCR Confidence Flags
+                      </h4>
+                      <p className="text-[10px] text-amber-700/80 mb-3 font-mono">
+                        Words with &lt;75% confidence are highlighted in red for human review.
+                      </p>
+                      <div className="flex flex-wrap gap-1 text-[11px] font-mono leading-relaxed bg-white p-3 border border-amber-200 rounded-sm">
+                        {confidenceData.map((item, idx) => (
+                          <span 
+                            key={idx} 
+                            title={`Confidence: ${(item.confidence * 100).toFixed(1)}%`}
+                            className={item.confidence < 0.75 
+                              ? "bg-rose-100 text-rose-900 font-bold px-1 rounded border border-rose-200 cursor-help" 
+                              : "text-slate-600"}
+                          >
+                            {item.text}
+                          </span>
+                        ))}
+                      </div>
                     </div>
+                  )}
+
+                  {/* Editable Form */}
+                  <div className="p-6 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">Registration No.</label>
+                        <input type="text" name="regNo" value={formData.regNo} onChange={handleInputChange} className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">Date of Issue</label>
+                        <input type="text" name="date" value={formData.date} onChange={handleInputChange} className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">District</label>
+                        <input type="text" name="district" value={formData.district} onChange={handleInputChange} className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">Mandal</label>
+                        <input type="text" name="mandal" value={formData.mandal} onChange={handleInputChange} className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">Village</label>
+                        <input type="text" name="village" value={formData.village} onChange={handleInputChange} className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">Survey Number</label>
+                        <input type="text" name="surveyNo" value={formData.surveyNo} onChange={handleInputChange} className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none" />
+                      </div>
+                    </div>
+
                     <div>
-                      <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">Date of Issue</label>
-                      <input type="text" name="date" value={formData.date} onChange={handleInputChange} className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none" />
+                      <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">Total Extent</label>
+                      <input type="text" name="extent" value={formData.extent} onChange={handleInputChange} className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none" />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">Landholder Name</label>
+                      <input type="text" name="owner" value={formData.owner} onChange={handleInputChange} className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none" />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">Khata Number</label>
+                      <input type="text" name="khata" value={formData.khata} onChange={handleInputChange} className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none" />
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">District</label>
-                      <input type="text" name="district" value={formData.district} onChange={handleInputChange} className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">Mandal</label>
-                      <input type="text" name="mandal" value={formData.mandal} onChange={handleInputChange} className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none" />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">Village</label>
-                      <input type="text" name="village" value={formData.village} onChange={handleInputChange} className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">Survey Number</label>
-                      <input type="text" name="surveyNo" value={formData.surveyNo} onChange={handleInputChange} className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none" />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">Total Extent</label>
-                    <input type="text" name="extent" value={formData.extent} onChange={handleInputChange} className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none" />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">Landholder Name</label>
-                    <input type="text" name="owner" value={formData.owner} onChange={handleInputChange} className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none" />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">Khata Number</label>
-                    <input type="text" name="khata" value={formData.khata} onChange={handleInputChange} className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none" />
-                  </div>
-
                 </div>
                 
-                {/* Action Buttons Pinned to Bottom */}
+                {/* Action Buttons */}
                 <div className="p-4 border-t border-slate-100 bg-white space-y-3">
                   {selectedDoc.status === 'pending' && (
                     <button onClick={() => handleRunAI(selectedDoc.id)} disabled={processing} className="w-full py-2.5 bg-amber-600 text-white text-[10px] uppercase tracking-widest font-bold hover:bg-amber-700 transition disabled:opacity-40">
