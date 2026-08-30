@@ -1,52 +1,89 @@
-export default function HomePage() {
-  return (
-    <div className="relative h-screen w-full overflow-hidden bg-black">
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+
+const fullText = "ONE STEP TOWARDS DIGITAL INDIA";
+
+export default function LandingPage() {
+  const [displayedText, setDisplayedText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [loopNum, setLoopNum] = useState(0);
+  const [typingSpeed, setTypingSpeed] = useState(100);
+
+  useEffect(() => {
+    const handleTyping = () => {
+      const i = loopNum % fullText.length;
       
-      {/* Full Screen Background Image */}
-      <div 
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat scale-105 animate-[pulse_10s_ease-in-out_infinite_alternate]"
-        style={{ 
-          backgroundImage: '/Users/anudeep/DVS/intelligent-land-records/frontend/public/home-bg.jpg',
-        }}
-      />
+      if (!isDeleting) {
+        setDisplayedText(fullText.substring(0, displayedText.length + 1));
+        setTypingSpeed(80);
 
-      {/* Cinematic Overlays (Vignette & Gradient for text readability) */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-      <div className="absolute inset-0 bg-orange-900/10 mix-blend-overlay" />
+        if (displayedText === fullText) {
+          // Pause before deleting
+          setTimeout(() => setIsDeleting(true), 1500);
+          setTypingSpeed(40);
+        }
+      } else {
+        setDisplayedText(fullText.substring(0, displayedText.length - 1));
+        setTypingSpeed(40);
 
-      {/* Content Container */}
-      <div className="absolute inset-0 max-w-[1400px] mx-auto px-8 pb-16 flex flex-col justify-end">
-        <div className="flex flex-col lg:flex-row justify-between items-end gap-12">
-          
-          {/* Main Headline (Bottom Left) */}
-          <div className="flex-1">
-            <h1 className="font-serif text-6xl md:text-8xl lg:text-[110px] leading-[0.9] text-white antialiased drop-shadow-2xl">
-              One Step <br />
-              <span className="italic opacity-90">Towards</span> <br />
-              Digital India
-            </h1>
-          </div>
+        if (displayedText === '') {
+          setIsDeleting(false);
+          setLoopNum(loopNum + 1);
+        }
+      }
+    };
 
-          {/* Frosted Glass Info Box (Bottom Right) */}
-          <div className="w-full md:w-[420px] backdrop-blur-xl bg-black/20 border border-white/10 p-8 md:p-10 text-white/90 shadow-2xl relative overflow-hidden group">
-            
-            {/* Subtle glow effect inside the box */}
-            <div className="absolute -top-20 -right-20 w-40 h-40 bg-orange-500/20 blur-3xl rounded-full" />
-            
-            <h3 className="font-serif text-2xl md:text-3xl mb-4 leading-snug relative z-10">
-              An intelligent system for <br /> modern land administration.
-            </h3>
-            <p className="text-sm font-sans tracking-wide leading-relaxed opacity-70 mb-8 relative z-10">
+    const timer = setTimeout(handleTyping, typingSpeed);
+    return () => clearTimeout(timer);
+  }, [displayedText, isDeleting, loopNum, typingSpeed]);
+
+  return (
+    <main className="min-h-screen bg-black text-white flex flex-col justify-between p-8 md:p-16 select-none">
+      
+      {/* Top Bar */}
+
+
+      {/* Hero Section */}
+      <div className="flex flex-col lg:flex-row items-center justify-center w-full max-w-6xl mx-auto my-auto gap-16 py-12">
+        <div className="flex-1 text-center lg:text-left">
+          <h1 className="text-4xl md:text-6xl font-serif font-bold tracking-tight leading-snug min-h-[160px] flex items-center">
+            <span>
+              {displayedText}
+              <span className="inline-block w-2 h-8 bg-white ml-1 animate-pulse align-middle" />
+            </span>
+          </h1>
+        </div>
+
+        <div className="flex-1 w-full max-w-md">
+          <div className="p-8 border border-white/10 bg-white/[0.02] backdrop-blur-sm relative overflow-hidden shadow-2xl">
+            <div className="min-h-[70px] flex items-center">
+              <p className="font-serif text-lg text-white/90 leading-snug">
+                An intelligent system for modern land administration.
+              </p>
+            </div>
+
+            <p className="text-xs text-white/50 font-light mt-6 mb-8 leading-relaxed">
               A platform to securely digitize, automatically validate, and seamlessly integrate legacy land records using advanced AI and Computer Vision.
             </p>
-            
-            <p className="font-serif italic text-lg opacity-90 cursor-pointer hover:opacity-100 transition-opacity relative z-10 flex items-center gap-2">
-              (access portal) <span className="text-xl group-hover:translate-x-2 transition-transform">→</span>
-            </p>
+
+            <Link 
+              href="/login" 
+              className="inline-flex items-center space-x-2 text-xs uppercase tracking-widest font-mono text-white hover:text-white/70 transition group"
+            >
+              <span>(ACCESS PORTAL)</span>
+              <span className="transform group-hover:translate-x-1 transition-transform">→</span>
+            </Link>
           </div>
-          
         </div>
       </div>
-    </div>
+
+      <div className="w-full max-w-7xl mx-auto flex justify-between items-center text-[10px] uppercase font-mono text-white/30">
+        <span>Telangana Revenue Framework</span>
+        <span>Secured Node</span>
+      </div>
+
+    </main>
   );
 }
