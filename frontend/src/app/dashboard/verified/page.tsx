@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
-import { FileCheck, CheckCircle2, Clock, AlertCircle, Eye, ArrowRight } from 'lucide-react';
+import { FileCheck, CheckCircle2, Clock, AlertCircle, Eye, ArrowRight, Download } from 'lucide-react';
+import jsPDF from 'jspdf';
 
 export default function VerifiedDataPage() {
   const [documents, setDocuments] = useState<any[]>([]);
@@ -57,6 +58,61 @@ export default function VerifiedDataPage() {
       setDocuments(documents.map(doc => doc.id === id ? { ...doc, status: 'verified' } : doc));
       if (selectedDoc?.id === id) setSelectedDoc({ ...selectedDoc, status: 'verified' });
     }
+  };
+
+  // Generate Official Government Certificate PDF
+  const handleDownloadCertificate = (doc: any) => {
+    const pdf = new jsPDF();
+    
+    // Border Styling
+    pdf.setLineWidth(0.5);
+    pdf.rect(10, 10, 190, 277);
+    
+    // Header
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(16);
+    pdf.text("GOVERNMENT OF TELANGANA", 105, 25, { align: "center" });
+    
+    pdf.setFontSize(12);
+    pdf.setFont("helvetica", "normal");
+    pdf.text("OFFICE OF THE DISTRICT REVENUE AUTHORITY", 105, 33, { align: "center" });
+    
+    pdf.setLineWidth(0.2);
+    pdf.line(20, 40, 190, 40);
+
+    // Title
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(14);
+    pdf.text("OFFICIAL LAND REGISTRY VERIFICATION CERTIFICATE", 105, 55, { align: "center" });
+
+    // Metadata Block
+    pdf.setFontSize(11);
+    pdf.setFont("helvetica", "normal");
+    pdf.text(`Document Reference ID: ${doc.id}`, 20, 75);
+    pdf.text(`File Name: ${doc.file_name}`, 20, 85);
+    pdf.text(`Digitization Timestamp: ${new Date(doc.uploaded_at).toLocaleString()}`, 20, 95);
+    pdf.text(`Verification Status: OFFICIALLY VERIFIED & SIGNED`, 20, 105);
+
+    // Extracted Content Section
+    pdf.setFont("helvetica", "bold");
+    pdf.text("AI Extracted Registry Content Summary:", 20, 125);
+    
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+    const splitText = pdf.splitTextToSize(doc.extracted_text || "No text extracted.", 170);
+    pdf.text(splitText, 20, 135);
+
+    // Footer Stamp
+    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "bold");
+    pdf.text("DIGITALLY SIGNED BY LAND RECORDS AI ENGINE", 20, 240);
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.text(`Generated on: ${new Date().toLocaleString()}`, 20, 247);
+    pdf.text("This is a system-generated verified record under institutional protocols.", 20, 254);
+
+    // Save PDF
+    pdf.save(`Land_Certificate_${doc.file_name.split('.')[0]}.pdf`);
   };
 
   return (
@@ -125,13 +181,22 @@ export default function VerifiedDataPage() {
                         {processing ? 'Running AI...' : 'Run AI Extraction'}
                       </button>
                     )}
-                    <button 
-                      onClick={() => handleVerify(selectedDoc.id)}
-                      disabled={selectedDoc.status === 'verified'}
-                      className="px-6 py-2 bg-black text-white text-xs uppercase tracking-widest font-semibold hover:bg-black/80 transition disabled:opacity-40"
-                    >
-                      {selectedDoc.status === 'verified' ? 'Verified Record' : 'Approve & Verify'}
-                    </button>
+                    {selectedDoc.status !== 'verified' ? (
+                      <button 
+                        onClick={() => handleVerify(selectedDoc.id)}
+                        className="px-6 py-2 bg-black text-white text-xs uppercase tracking-widest font-semibold hover:bg-black/80 transition"
+                      >
+                        Approve & Verify
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={() => handleDownloadCertificate(selectedDoc)}
+                        className="flex items-center space-x-2 px-6 py-2 bg-emerald-700 text-white text-xs uppercase tracking-widest font-semibold hover:bg-emerald-800 transition"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Export Certificate</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
