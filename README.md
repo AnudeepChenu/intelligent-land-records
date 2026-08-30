@@ -759,31 +759,7 @@ git commit -m "Add your feature"
 git push origin feature/your-feature
 ```
 
-### 5. Open a Pull Request
 
-Describe the changes and include relevant screenshots or testing information where appropriate.
-
----
-
-# 📜 License
-
-This project is intended for educational, research, and demonstration purposes.
-
-Add your preferred open-source license here, for example:
-
-```text
-MIT License
-```
-
----
-
-# 👨‍💻 Author
-
-**Your Name**
-
-GitHub: `https://github.com/your-username`
-
----
 
 ## ⭐ Support the Project
 
