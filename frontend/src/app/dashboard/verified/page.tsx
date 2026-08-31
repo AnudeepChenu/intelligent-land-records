@@ -12,10 +12,10 @@ export default function VerifiedDataPage() {
   const [processing, setProcessing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   
-  // NEW: State to hold the AI's word-by-word confidence scores
+  // NEW: State for language dropdown selection
+  const [docLanguage, setDocLanguage] = useState('te'); 
   const [confidenceData, setConfidenceData] = useState<{text: string, confidence: number}[]>([]);
 
-  // Editable Form State
   const [formData, setFormData] = useState({
     regNo: '', date: '', district: '', mandal: '', village: '', 
     surveyNo: '', extent: '', owner: '', khata: ''
@@ -34,29 +34,9 @@ export default function VerifiedDataPage() {
     fetchDocuments();
   }, []);
 
-  const parseExtractedText = (text: string) => {
-    if (!text) return;
-    const safeMatch = (regex: RegExp) => {
-      const match = text.match(regex);
-      return match ? match[1].trim() : '';
-    };
-
-    setFormData({
-      regNo: safeMatch(/Registration No:\s*(.*?)\s*Date/i) || safeMatch(/Registration No:\s*([^\s]+)/i),
-      date: safeMatch(/Date of Issue:\s*(.*?)\s*1\./i),
-      district: safeMatch(/District:\s*(.*?)\s*Mandal:/i),
-      mandal: safeMatch(/Mandal:\s*(.*?)\s*Village:/i),
-      village: safeMatch(/Village:\s*(.*?)\s*Survey/i),
-      surveyNo: safeMatch(/Survey Number:\s*(.*?)\s*Total/i),
-      extent: safeMatch(/Total Extent:\s*(.*?)\s*Land/i),
-      owner: safeMatch(/Landholder Name:\s*(.*?)\s*Father/i),
-      khata: safeMatch(/Khata Number:\s*(\d+)/i),
-    });
-  };
-
   const handleSelectDoc = async (doc: any) => {
     setSelectedDoc(doc);
-    setConfidenceData([]); // Clear previous confidence data
+    setConfidenceData([]);
     
     const { data, error } = await supabase.storage
       .from('land_records') 
@@ -65,8 +45,6 @@ export default function VerifiedDataPage() {
     if (!error && data) {
       setPreviewUrl(data.signedUrl);
     }
-    
-    parseExtractedText(doc.extracted_text);
   };
 
   const handleRunAI = async (id: string) => {
@@ -75,7 +53,8 @@ export default function VerifiedDataPage() {
       const response = await fetch('http://localhost:8000/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ document_id: id }),
+        // NEW: Pass the selected language to the backend
+        body: JSON.stringify({ document_id: id, language: docLanguage }),
       });
       const result = await response.json();
       
@@ -83,9 +62,21 @@ export default function VerifiedDataPage() {
         setDocuments(documents.map(doc => doc.id === id ? { ...doc, status: 'extracted', extracted_text: result.preview } : doc));
         const updatedDoc = { ...selectedDoc, status: 'extracted', extracted_text: result.preview };
         setSelectedDoc(updatedDoc);
-        parseExtractedText(result.preview);
         
-        // NEW: Store the confidence data from the Python backend
+        if (result.structured_data) {
+          setFormData({
+            regNo: result.structured_data.regNo || '',
+            date: result.structured_data.date || '',
+            district: result.structured_data.district || '',
+            mandal: result.structured_data.mandal || '',
+            village: result.structured_data.village || '',
+            surveyNo: result.structured_data.surveyNo || '',
+            extent: result.structured_data.extent || '',
+            owner: result.structured_data.owner || '',
+            khata: result.structured_data.khata || ''
+          });
+        }
+        
         if (result.confidence_data) {
           setConfidenceData(result.confidence_data);
         }
@@ -172,7 +163,6 @@ export default function VerifiedDataPage() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[75vh] min-h-[600px]">
           
-          {/* Column 1: Document List */}
           <div className="lg:col-span-3 border border-slate-200 bg-white flex flex-col overflow-hidden shadow-sm">
             <div className="p-4 border-b border-slate-100 bg-slate-50">
               <h3 className="text-xs font-bold tracking-widest uppercase text-slate-500">Registry Queue</h3>
@@ -202,7 +192,6 @@ export default function VerifiedDataPage() {
             </div>
           </div>
 
-          {/* Column 2: Document Preview */}
           <div className="lg:col-span-5 border border-slate-200 bg-slate-100 flex flex-col shadow-sm">
             <div className="p-4 border-b border-slate-200 bg-white flex justify-between items-center">
               <h3 className="text-xs font-bold tracking-widest uppercase text-slate-500 flex items-center">
@@ -220,7 +209,6 @@ export default function VerifiedDataPage() {
             </div>
           </div>
 
-          {/* Column 3: Extracted Details & Flags */}
           <div className="lg:col-span-4 border border-slate-200 bg-white flex flex-col shadow-sm">
             <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
               <h3 className="text-xs font-bold tracking-widest uppercase text-slate-500 flex items-center">
@@ -232,7 +220,6 @@ export default function VerifiedDataPage() {
               <div className="flex-1 flex flex-col overflow-hidden">
                 <div className="flex-1 overflow-y-auto p-0">
                   
-                  {/* NEW: AI Confidence Flags Section */}
                   {confidenceData.length > 0 && (
                     <div className="p-4 bg-amber-50/50 border-b border-amber-100">
                       <h4 className="text-[10px] font-bold text-amber-800 uppercase tracking-widest mb-2 flex items-center">
@@ -257,7 +244,6 @@ export default function VerifiedDataPage() {
                     </div>
                   )}
 
-                  {/* Editable Form */}
                   <div className="p-6 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -309,12 +295,28 @@ export default function VerifiedDataPage() {
                   </div>
                 </div>
                 
-                {/* Action Buttons */}
                 <div className="p-4 border-t border-slate-100 bg-white space-y-3">
                   {selectedDoc.status === 'pending' && (
-                    <button onClick={() => handleRunAI(selectedDoc.id)} disabled={processing} className="w-full py-2.5 bg-amber-600 text-white text-[10px] uppercase tracking-widest font-bold hover:bg-amber-700 transition disabled:opacity-40">
-                      {processing ? 'Processing Document...' : 'Run AI Extraction'}
-                    </button>
+                    <>
+                      {/* NEW: Language Dropdown Selector */}
+                      <div className="mb-3">
+                        <label className="block text-[10px] font-mono uppercase text-slate-500 mb-1">Document Language Profile</label>
+                        <select 
+                          value={docLanguage}
+                          onChange={(e) => setDocLanguage(e.target.value)}
+                          className="w-full px-2 py-1.5 border border-slate-200 bg-white text-black text-xs focus:border-black focus:outline-none"
+                        >
+                          <option value="te">English + Telugu</option>
+                          <option value="mr">English + Marathi</option>
+                          <option value="hi">English + Hindi</option>
+                          <option value="en">English Only</option>
+                        </select>
+                      </div>
+                      
+                      <button onClick={() => handleRunAI(selectedDoc.id)} disabled={processing} className="w-full py-2.5 bg-amber-600 text-white text-[10px] uppercase tracking-widest font-bold hover:bg-amber-700 transition disabled:opacity-40">
+                        {processing ? 'Processing Document...' : 'Run AI Extraction'}
+                      </button>
+                    </>
                   )}
                   {selectedDoc.status !== 'verified' ? (
                     <button onClick={() => handleVerify(selectedDoc.id)} className="w-full py-2.5 bg-black text-white text-[10px] uppercase tracking-widest font-bold hover:bg-black/80 transition flex items-center justify-center">

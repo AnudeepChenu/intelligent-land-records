@@ -1,5 +1,4 @@
 import os
-import re
 from dotenv import load_dotenv
 import fitz  # PyMuPDF
 import easyocr
@@ -10,140 +9,120 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from supabase import create_client, Client
 
-print("--- STARTING AI ENGINE ---")
+print("--- STARTING LIGHTWEIGHT AI ENGINE ---")
 
-# 1. Load the environment variables from the .env file
 load_dotenv()
-
-# 2. Fetch the credentials
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-# 3. Hard crash if they are missing
 if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("CRITICAL ERROR: Supabase credentials not found. Make sure your .env file is inside the 'backend' folder!")
+    raise ValueError("CRITICAL ERROR: Supabase credentials not found.")
 
-print(f"Supabase URL Found: {SUPABASE_URL}")
-print("Supabase Key Found: [HIDDEN FOR SECURITY]")
-
-# 4. Initialize the global Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-print("Supabase Client Successfully Initialized.")
 
-# 5. Initialize the FastAPI app
 app = FastAPI(title="Land Records AI Engine")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 6. Initialize OCR (Loads into memory once, optimized for handwriting & text)
-print("Loading OCR Engine (this takes a few seconds)...")
-reader = easyocr.Reader(['en'])
-print("OCR Engine Ready for Requests.")
-print("--------------------------")
+# OCR CACHE DICTIONARY FOR ON-DEMAND LANGUAGE LOADING
+ocr_cache = {"current_lang": None, "reader": None}
+
+def get_ocr_reader(lang_code: str):
+    langs = ['en']
+    if lang_code and lang_code != 'en':
+        langs.append(lang_code)
+    lang_key = "-".join(sorted(langs))
+    
+    if ocr_cache["current_lang"] != lang_key:
+        print(f"\n[OCR] Loading model for languages: {langs}...")
+        ocr_cache["reader"] = easyocr.Reader(langs, gpu=False)
+        ocr_cache["current_lang"] = lang_key
+        print("[OCR] Model loaded successfully.")
+    return ocr_cache["reader"]
+
+print("--- ENGINE READY ---")
 
 class ProcessRequest(BaseModel):
     document_id: str
+    language: str = "te"
 
-@app.get("/")
-async def root():
-    return {"status": "online", "message": "AI Document Processing Engine is running."}
+import re
+
+def smart_extract(text: str) -> dict:
+    """Intelligently parses text for land record fields regardless of state formatting."""
+    clean = text.replace('\n', ' ')
+    
+    def find(patterns):
+        for p in patterns:
+            m = re.search(p, clean, re.IGNORECASE)
+            if m and m.group(1):
+                return m.group(1).strip()
+        return ""
+
+    return {
+        "regNo": find([r"Registration No[\s:.-]*([A-Z0-9\/]+)", r"Ulpin[\s:.-]*([A-Z0-9]+)"]),
+        "date": find([r"Date of Issue[\s:.-]*([A-Za-z]+\s\d{1,2},?\s\d{4})", r"Date[\s:.-]*([\d\-\/]+)"]),
+        "district": find([r"District[\s:.-]*([a-zA-Z]+)", r"Dist[\s:.-]*([a-zA-Z]+)"]),
+        "mandal": find([r"Mandal[\s:.-]*([a-zA-Z]+)", r"Taluka[\s:.-]*([a-zA-Z]+)", r"Tehsil[\s:.-]*([a-zA-Z]+)"]),
+        "village": find([r"Village[\s:.-]*([a-zA-Z0-9()]+)", r"Village\s*[:-]+\s*([a-zA-Z]+\(\d+\))"]),
+        "surveyNo": find([r"Survey Number[\s:.-]*([a-zA-Z0-9\/]+)", r"Survey No[\s:.-]*([a-zA-Z0-9\/]+)", r"Gat No[\s:.-]*([a-zA-Z0-9\/]+)"]),
+        "extent": find([r"Total Area\s*\(a\+b\)\s*[:.-]*([0-9\.]+)", r"Total Extent[\s:.-]*([0-9a-zA-Z\.\s]+)", r"Irrigated[\s:.-]*([0-9\.]+)"]),
+        "owner": find([r"bhogavatadar[\s:a-zA-Z]*([a-zA-Z\s]{5,30})", r"Landholder Name[\s:.-]*([a-zA-Z\s]+)(?:Father|-)", r"Occupant[\s:.-]*([a-zA-Z\s]+)"]),
+        "khata": find([r"khate kra\.?\s*(\d+)", r"Khata Number[\s:.-]*(\d+)"])
+    }
 
 @app.post("/process")
 async def process_document(request: ProcessRequest):
     try:
-        print(f"Processing request for Document ID: {request.document_id}")
-        
-        # Fetch document metadata
+        print(f"\nProcessing Document ID: {request.document_id} | Language: {request.language}")
+        reader = get_ocr_reader(request.language)
+
         doc_res = supabase.table('documents').select('*').eq('id', request.document_id).execute()
-        if not doc_res.data:
-            raise HTTPException(status_code=404, detail="Document not found in database")
+        if not doc_res.data: raise HTTPException(status_code=404, detail="Not found")
         
         document = doc_res.data[0]
-        file_path = document['file_path']
-        print(f"Found file path: {file_path}")
-
-        # Update status
         supabase.table('documents').update({'status': 'processing'}).eq('id', request.document_id).execute()
 
-        # Download file
-        print("Downloading file from storage...")
-        file_data = supabase.storage.from_('land_records').download(file_path)
-        
-        extracted_text = ""
+        file_data = supabase.storage.from_('land_records').download(document['file_path'])
+        extracted_text, confidence_data = "", []
 
-        # Process file with handwriting-optimized parameters
         if document['file_type'] == 'application/pdf':
-            print("File is PDF. Converting pages to images...")
             pdf_document = fitz.open(stream=file_data, filetype="pdf")
             for page_num in range(len(pdf_document)):
                 page = pdf_document.load_page(page_num)
-                pix = page.get_pixmap(dpi=200) # Higher DPI for faint handwriting strokes
+                pix = page.get_pixmap(dpi=200)
                 img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)
-                if pix.n == 4:
-                    img = cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
+                if pix.n == 4: img = cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
                 
-                print(f"Running OCR on page {page_num + 1} (Handwriting Optimized)...")
-                results = reader.readtext(
-                    img, 
-                    detail=0, 
-                    text_threshold=0.5, 
-                    low_text=0.3, 
-                    paragraph=False
-                )
-                extracted_text += " ".join(results) + "\n"
+                results = reader.readtext(img, text_threshold=0.5, low_text=0.3, paragraph=False)
+                for (bbox, text, prob) in results:
+                    extracted_text += text + " "
+                    confidence_data.append({"text": text, "confidence": float(prob)})
         else:
-            print("File is Image. Running handwriting-optimized OCR directly...")
             img = cv2.imdecode(np.frombuffer(file_data, np.uint8), cv2.IMREAD_COLOR)
-            results = reader.readtext(
-                img, 
-                detail=0, 
-                text_threshold=0.5, 
-                low_text=0.3, 
-                paragraph=False
-            )
-            extracted_text += " ".join(results)
+            results = reader.readtext(img, text_threshold=0.5, low_text=0.3, paragraph=False)
+            for (bbox, text, prob) in results:
+                extracted_text += text + " "
+                confidence_data.append({"text": text, "confidence": float(prob)})
 
-        print("OCR Complete. Parsing structured land record fields...")
-        
-        # Pattern parsing for structured land record data
-        survey_match = re.search(r"Survey Number[:\s]+([A-Za-z0-9/\-]+)", extracted_text, re.IGNORECASE)
-        owner_match = re.search(r"Registered Landholder Name[:\s]+([A-Za-z\s]+)", extracted_text, re.IGNORECASE)
-        extent_match = re.search(r"Total Extent[:\s]+([0-9\.\s[A-Za-z]+)", extracted_text, re.IGNORECASE)
-        mandal_match = re.search(r"Mandal[:\s]+([A-Za-z]+)", extracted_text, re.IGNORECASE)
+        structured_data = smart_extract(extracted_text)
 
-        structured_data = {
-            "survey_number": survey_match.group(1).strip() if survey_match else "N/A",
-            "owner_name": owner_match.group(1).strip() if owner_match else "N/A",
-            "extent": extent_match.group(1).strip() if extent_match else "N/A",
-            "mandal": mandal_match.group(1).strip() if mandal_match else "N/A"
-        }
-
-        print("Saving to database...")
-        
-        # Save extracted text and update status
         supabase.table('documents').update({
-            'status': 'extracted',
-            'extracted_text': extracted_text
+            'status': 'extracted', 'extracted_text': extracted_text
         }).eq('id', request.document_id).execute()
 
-        print("Success! Data saved.")
         return {
-            "status": "success", 
-            "document_id": request.document_id,
-            "parsed_metadata": structured_data,
-            "preview": extracted_text[:200] + "..." 
+            "status": "success", "preview": extracted_text,
+            "confidence_data": confidence_data, "structured_data": structured_data
         }
 
     except Exception as e:
-        print(f"ERROR OCCURRED: {str(e)}")
-        try:
-            supabase.table('documents').update({'status': 'rejected'}).eq('id', request.document_id).execute()
-        except:
-            pass
+        print(f"Error: {str(e)}")
+        supabase.table('documents').update({'status': 'rejected'}).eq('id', request.document_id).execute()
         raise HTTPException(status_code=500, detail=str(e))
