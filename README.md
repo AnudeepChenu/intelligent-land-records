@@ -1,766 +1,160 @@
-# 🏛️ Intelligent Land Records Digitization & Verification System
 
-An end-to-end intelligent platform for **automated land record ingestion, handwriting-optimized OCR extraction, metadata parsing, human-in-the-loop verification, and official government certificate generation**.
+# 🏛️ Intelligent Land Records Management System (LRMS)
 
-The system combines a modern Next.js frontend with a Python-based AI/OCR engine and Supabase for secure database and document storage.
+![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.103-009688?logo=fastapi)
+![Supabase](https://img.shields.io/badge/Supabase-Database-3ECF8E?logo=supabase)
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python)
 
----
+An intelligent platform designed to securely digitize, automatically validate, and seamlessly integrate legacy land records using advanced AI, Computer Vision, and OCR. 
 
-## ✨ Features
-
-* 📄 **Land Record Upload**
-
-  * Upload scanned land records in PDF or image format.
-  * Securely store documents using Supabase private storage.
-
-* 🤖 **AI-Powered OCR**
-
-  * Extract text from scanned documents using EasyOCR.
-  * Optimized for challenging handwritten and low-quality documents.
-  * OpenCV-based image preprocessing.
-
-* 🧠 **Metadata Extraction**
-
-  * Parse important information from extracted land records.
-  * Prepare structured data for verification.
-
-* 👨‍💼 **Human-in-the-Loop Verification**
-
-  * Review AI-generated extraction results.
-  * Approve or correct extracted information before final verification.
-
-* 🏛️ **Government Certificate Generation**
-
-  * Generate official-looking verification certificates.
-  * Export certificates as downloadable PDF documents.
-
-* 🔐 **Secure Data Storage**
-
-  * PostgreSQL database through Supabase.
-  * Private document storage buckets.
-  * Row Level Security (RLS) support.
+Built for modern land administration, this system replaces manual data entry with an automated AI pipeline, complete with a 50/50 human-in-the-loop verification portal and real-time document queues.
 
 ---
 
-## 🏗️ System Architecture
+## ✨ Key Features
 
-```text
-┌─────────────────────────────────────────────┐
-│                 Next.js Frontend            │
-│                                             │
-│  Upload Portal → Verification Queue         │
-│       ↓                ↓                    │
-│  Supabase Storage   Review & Approval       │
-│                         ↓                   │
-│                 Certificate PDF              │
-└──────────────────────┬──────────────────────┘
-                       │
-                       │ REST API
-                       ▼
-┌─────────────────────────────────────────────┐
-│             Python FastAPI Backend          │
-│                                             │
-│  Document Processing                        │
-│       ↓                                     │
-│  PyMuPDF / OpenCV                           │
-│       ↓                                     │
-│  EasyOCR                                    │
-│       ↓                                     │
-│  Text & Metadata Extraction                 │
-└──────────────────────┬──────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────┐
-│                    Supabase                 │
-│                                             │
-│  PostgreSQL Database                        │
-│  Private Storage                            │
-│  Row Level Security                         │
-└─────────────────────────────────────────────┘
-```
+* **🔐 Secure Authentication:** Role-based access control powered by Supabase Auth.
+* **📄 Document Ingestion:** Drag-and-drop interface for uploading legacy records (PDF, JPG, PNG) directly to secure cloud storage buckets.
+* **🤖 AI Extraction Engine (OCR):** Python/FastAPI backend utilizing EasyOCR and PyMuPDF to extract text from multi-page documents in multiple regional languages (English, Telugu, Hindi, Marathi).
+* **🎨 Visual Confidence Mapping:** OpenCV automatically draws color-coded bounding boxes (**Green:** >80%, **Yellow:** >50%, **Red:** <50%) directly onto the document preview to highlight AI confidence levels.
+* **⚡ Real-Time Queues:** Global document queues that update instantly across all clients using Supabase Realtime WebSockets.
+* **⚖️ Verification Portal:** A side-by-side (50/50) split layout allowing officials to cross-reference AI-extracted data against the annotated document preview.
+* **🖨️ Certificate Generation:** Instantly generate and download digitally verified PDF certificates for processed land records.
 
 ---
 
-## 🛠️ Technology Stack
+## 🛠️ Tech Stack
 
-### Frontend
+**Frontend:**
+* [Next.js](https://nextjs.org/) (App Router)
+* [React](https://react.dev/)
+* [Tailwind CSS](https://tailwindcss.com/)
+* [Lucide React](https://lucide.dev/) (Icons)
+* [jsPDF](https://github.com/parallax/jsPDF) (Client-side PDF generation)
 
-| Technology       | Purpose                                 |
-| ---------------- | --------------------------------------- |
-| **Next.js**      | React framework and application routing |
-| **App Router**   | Modern Next.js routing architecture     |
-| **Tailwind CSS** | UI styling                              |
-| **Lucide Icons** | Interface icons                         |
-| **jsPDF**        | Certificate PDF generation              |
+**Backend (AI Engine):**
+* [FastAPI](https://fastapi.tiangolo.com/)
+* [EasyOCR](https://github.com/JaidedAI/EasyOCR)
+* [OpenCV](https://opencv.org/) & [NumPy](https://numpy.org/)
+* [PyMuPDF (fitz)](https://pymupdf.readthedocs.io/en/latest/)
 
-### Backend / AI Engine
-
-| Technology         | Purpose                             |
-| ------------------ | ----------------------------------- |
-| **Python**         | Backend and AI processing           |
-| **FastAPI**        | REST API                            |
-| **EasyOCR**        | OCR and handwriting text extraction |
-| **OpenCV**         | Image preprocessing                 |
-| **PyMuPDF (fitz)** | PDF processing                      |
-| **Uvicorn**        | ASGI development server             |
-
-### Database & Storage
-
-| Technology             | Purpose                                |
-| ---------------------- | -------------------------------------- |
-| **Supabase**           | Backend-as-a-Service                   |
-| **PostgreSQL**         | Document metadata and application data |
-| **Supabase Storage**   | Secure document storage                |
-| **Row Level Security** | Database access control                |
+**Database & Storage:**
+* [Supabase](https://supabase.com/) (PostgreSQL, Edge Storage, Realtime Subscriptions, Auth)
 
 ---
 
-# ⚙️ Prerequisites
+## 🚀 Getting Started
 
-Make sure the following are installed on your system:
+### Prerequisites
+* **Node.js** (v18 or higher)
+* **Python** (v3.10 or higher)
+* A **Supabase** account and project
 
-* [Node.js](https://nodejs.org/) **v18+**
-* npm
-* [Python](https://www.python.org/) **v3.10+**
-* pip
-* A [Supabase](https://supabase.com/) account
-* Git
+### 1. Database Setup
+1. Create a new project in [Supabase](https://supabase.com/).
+2. Go to the SQL Editor and run the master schema provided in `database_schema.sql` (this creates your `documents` table, `profiles`, storage buckets, and RLS policies).
 
-You can verify your installations with:
+### 2. Environment Variables
+Create a `.env` file in **both** the `frontend` and `backend` directories.
 
-```bash
-node --version
-npm --version
-python3 --version
-pip --version
-git --version
+**Frontend (`frontend/.env.local`):**
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+
 ```
 
----
+**Backend (`backend/.env`):**
 
-# 🚀 Installation & Setup
+```env
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_KEY=your_supabase_service_role_key # Needs bypass RLS for processing
 
-## 1. Clone the Repository
-
-Clone the project and move into the project directory:
-
-```bash
-git clone https://github.com/your-username/intelligent-land-records.git
-
-cd intelligent-land-records
 ```
 
----
+### 3. Backend Setup (AI Engine)
 
-# 🗄️ 2. Supabase Setup
-
-Create a new project from the [Supabase Dashboard](https://supabase.com/dashboard).
-
-### Create Storage Bucket
-
-Navigate to:
-
-```text
-Supabase Dashboard
-       ↓
-Storage
-       ↓
-Create Bucket
-```
-
-Create a **private** bucket named:
-
-```text
-land_records
-```
-
----
-
-## Create the Documents Table
-
-Open:
-
-```text
-Supabase Dashboard
-       ↓
-SQL Editor
-       ↓
-New Query
-```
-
-Run the following SQL:
-
-```sql
-create table public.documents (
-  id uuid default gen_random_uuid() primary key,
-  file_name text not null,
-  file_path text not null,
-  file_type text not null,
-  status text default 'pending',
-  extracted_text text,
-  uploaded_at timestamp with time zone
-    default timezone('utc'::text, now()) not null
-);
-```
-
-### Recommended RLS Configuration
-
-For production deployments, enable Row Level Security:
-
-```sql
-alter table public.documents enable row level security;
-```
-
-> Add policies appropriate to your application's authentication model before exposing the table to users.
-
----
-
-# 🔑 3. Get Supabase Credentials
-
-Go to:
-
-```text
-Supabase Dashboard
-    ↓
-Project Settings
-    ↓
-API
-```
-
-You will need:
-
-* **Project URL**
-* **anon public key**
-* **service role key**
-
-### ⚠️ Important Security Rule
-
-The keys have different purposes:
-
-| Key                | Used By          | Public?                     |
-| ------------------ | ---------------- | --------------------------- |
-| `anon` key         | Next.js frontend | ✅ Yes                       |
-| `service_role` key | FastAPI backend  | ❌ **Never expose publicly** |
-
-**Never commit your `service_role` key to GitHub.**
-
----
-
-# 🐍 4. Backend Setup
-
-Open a new terminal and navigate to the backend:
+Open a terminal and navigate to the backend folder.
 
 ```bash
 cd backend
-```
 
-## Create a Virtual Environment
-
-### macOS / Linux
-
-```bash
-python3 -m venv venv
-
-source venv/bin/activate
-```
-
-### Windows
-
-```powershell
+# Create and activate a virtual environment
 python -m venv venv
+source venv/bin/activate  # On Windows use: venv\Scripts\activate
 
-venv\Scripts\activate
+# Install dependencies
+pip install fastapi uvicorn easyocr opencv-python-headless pymupdf python-dotenv supabase pydantic
+
+# Run the FastAPI server
+uvicorn app.main:app --reload --port 8000
+
 ```
 
----
+> **Note:** The first time you run an extraction, EasyOCR will download the necessary language models to your machine.
 
-## Install Dependencies
+### 4. Frontend Setup
 
-Install the required Python packages:
-
-```bash
-pip install fastapi uvicorn supabase-py python-dotenv python-multipart pydantic easyocr opencv-python-headless pymupdf
-```
-
-Or, if the project contains `requirements.txt`:
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-## Create Backend Environment Variables
-
-Create:
-
-```text
-backend/.env
-```
-
-Add:
-
-```env
-SUPABASE_URL=https://your-project-id.supabase.co
-SUPABASE_KEY=your-supabase-service-role-secret-key
-```
-
-### ⚠️ Never commit `.env`
-
-Make sure your `.gitignore` contains:
-
-```gitignore
-.env
-.env.local
-venv/
-__pycache__/
-node_modules/
-```
-
----
-
-# ▶️ 5. Start the FastAPI Server
-
-From the `backend` directory:
-
-```bash
-uvicorn main:app --reload --port 8000
-```
-
-The backend API will be available at:
-
-```text
-http://localhost:8000
-```
-
-FastAPI's interactive documentation is available at:
-
-```text
-http://localhost:8000/docs
-```
-
-> **Note:** The first EasyOCR startup may take some time because its recognition models need to be downloaded.
-
----
-
-# ⚛️ 6. Frontend Setup
-
-Open a **new terminal**.
-
-From the project root:
+Open a new terminal and navigate to the frontend folder.
 
 ```bash
 cd frontend
-```
 
-Install the Node.js dependencies:
-
-```bash
+# Install dependencies
 npm install
-```
 
----
-
-## Create Frontend Environment Variables
-
-Create:
-
-```text
-frontend/.env.local
-```
-
-Add:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-public-key
-```
-
-> Only use the Supabase **anon public key** in the frontend.
-
----
-
-# ▶️ 7. Start the Next.js Application
-
-Run:
-
-```bash
+# Run the development server
 npm run dev
+
 ```
 
-The application will be available at:
-
-```text
-http://localhost:3000
-```
-
-Open the URL in your browser.
+The frontend will be available at `http://localhost:3000` and the backend API at `http://localhost:8000`.
 
 ---
 
-# 🔄 End-to-End Workflow
-
-The complete workflow looks like this:
-
-```text
-        Upload Land Record
-                │
-                ▼
-       Supabase Private Storage
-                │
-                ▼
-        Document Registry
-                │
-                ▼
-       Run AI Extraction
-                │
-                ▼
-       FastAPI OCR Engine
-                │
-        ┌───────┴────────┐
-        ▼                ▼
-     PyMuPDF           OpenCV
-        │                │
-        └───────┬────────┘
-                ▼
-             EasyOCR
-                │
-                ▼
-       Extracted Raw Text
-                │
-                ▼
-       Metadata Processing
-                │
-                ▼
-       Human Verification
-                │
-        ┌───────┴────────┐
-        ▼                ▼
-     Reject             Approve
-                           │
-                           ▼
-             Official Certificate
-                           │
-                           ▼
-                       PDF Export
-```
-
----
-
-# 🧪 Testing the Application
-
-## 1. Open the Application
-
-Navigate to:
-
-```text
-http://localhost:3000
-```
-
----
-
-## 2. Upload a Land Record
-
-Navigate to:
-
-```text
-/dashboard/upload
-```
-
-Upload a:
-
-* PDF land record
-* Scanned document
-* Supported image document
-
-The file will be stored in the Supabase `land_records` bucket.
-
----
-
-## 3. Open the Verification Queue
-
-Navigate to:
-
-```text
-/dashboard/verified
-```
-
-Find the uploaded document in the registry.
-
----
-
-## 4. Run AI Extraction
-
-Select the document and click:
-
-```text
-Run AI Extraction
-```
-
-The frontend communicates with the FastAPI backend:
-
-```text
-Next.js
-   ↓
-FastAPI
-   ↓
-PyMuPDF / OpenCV
-   ↓
-EasyOCR
-   ↓
-Extracted Text
-```
-
----
-
-## 5. Review the Extraction
-
-Review the OCR output and parsed information.
-
-Because OCR can make mistakes—especially with handwritten records—the system uses a **human verification step** before final approval.
-
----
-
-## 6. Approve & Verify
-
-After reviewing the extracted information, click:
-
-```text
-Approve & Verify
-```
-
-The document status is updated and the record becomes verified.
-
----
-
-## 7. Generate Certificate
-
-The application generates an official certificate PDF containing the verified information and digital sign-offs.
-
-The certificate can then be downloaded from the application.
-
----
-
-# 📁 Project Structure
+## 📂 Project Structure
 
 ```text
 intelligent-land-records/
-│
-├── .gitignore
-├── README.md
-│
 ├── backend/
-│   ├── requirements.txt
-│   ├── .env
-│   ├── venv/
-│   │
-│   └── app/
-│       ├── __init__.py
-│       ├── main.py
-│       ├── ocr.py
-│       ├── parser.py
-│       └── ...
+│   ├── app/
+│   │   └── main.py          # FastAPI application & AI Engine logic
+│   ├── .env                 # Backend environment variables
+│   └── requirements.txt     # Python dependencies
 │
 └── frontend/
-    ├── package.json
-    ├── .env.local
-    ├── next.config.js
-    ├── tailwind.config.js
-    │
-    ├── app/
-    │   ├── page.jsx
+    ├── src/
+    │   ├── app/
+    │   │   ├── page.tsx               # Modern Landing Page
+    │   │   ├── login/page.tsx         # Authentication
+    │   │   ├── register/page.tsx      # User Registration
+    │   │   └── dashboard/
+    │   │       ├── layout.tsx         # Fixed Sidebar Layout (Cache-Busting)
+    │   │       ├── page.tsx           # Real-time Metrics & Progress
+    │   │       ├── upload/page.tsx    # Ingestion Portal
+    │   │       ├── verified/page.tsx  # 50/50 Review Editor & Queue
+    │   │       └── documents/page.tsx # Registry Archive
     │   │
-    │   └── dashboard/
-    │       ├── upload/
-    │       └── verified/
+    │   └── lib/
+    │       └── supabaseClient.ts      # Supabase initialization
     │
-    ├── components/
-    ├── lib/
-    └── public/
-```
+    ├── .env.local           # Frontend environment variables
+    ├── tailwind.config.ts
+    └── package.json
 
-> Adjust the structure above to match the actual files in your repository.
-
----
-
-# 🔐 Environment Variables
-
-## Backend
-
-Create:
-
-```text
-backend/.env
-```
-
-```env
-SUPABASE_URL=https://your-project-id.supabase.co
-SUPABASE_KEY=your-service-role-key
-```
-
-## Frontend
-
-Create:
-
-```text
-frontend/.env.local
-```
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-public-key
 ```
 
 ---
 
-# 🛡️ Security Considerations
+## 🧠 Smart Extraction Logic
 
-This project handles potentially sensitive land records, so security should be treated as a core requirement.
+The system utilizes a custom Regex-based `smart_extract` function to parse raw OCR data efficiently. It is built to handle varying regional formatting quirks for the following data points:
 
-### Never expose the Supabase service role key
-
-The service role key should exist **only on the backend**.
-
-```text
-❌ frontend/.env.local
-❌ GitHub
-❌ client-side JavaScript
-❌ public repositories
-
-✅ backend/.env
-```
-
-### Use private storage
-
-The `land_records` bucket should remain private.
-
-### Enable Row Level Security
-
-Use PostgreSQL RLS policies to control access to document metadata.
-
-### Protect production API endpoints
-
-For production, add:
-
-* Authentication
-* Authorization
-* API rate limiting
-* Input validation
-* File-size restrictions
-* File-type validation
-* Secure logging
-* HTTPS
-* Proper CORS configuration
-
----
-
-# 🧠 OCR Processing
-
-The backend uses a document-processing pipeline designed for scanned land records:
-
-```text
-Input Document
-      │
-      ▼
-PDF/Image Processing
-      │
-      ▼
-Image Preprocessing
-      │
-      ├── Noise Reduction
-      ├── Thresholding
-      ├── Contrast Enhancement
-      └── Image Conversion
-      │
-      ▼
-EasyOCR
-      │
-      ▼
-Raw Text
-      │
-      ▼
-Metadata Parsing
-      │
-      ▼
-Human Verification
-```
-
-This architecture allows OCR results to be reviewed before they are treated as verified information.
-
----
-
-# 📌 Current Status
-
-| Component                    | Status |
-| ---------------------------- | ------ |
-| Next.js Frontend             | ✅      |
-| Land Record Upload           | ✅      |
-| Supabase Storage             | ✅      |
-| PostgreSQL Document Registry | ✅      |
-| FastAPI Backend              | ✅      |
-| PDF Processing               | ✅      |
-| OpenCV Preprocessing         | ✅      |
-| EasyOCR Integration          | ✅      |
-| Verification Queue           | ✅      |
-| Human Verification           | ✅      |
-| Certificate Generation       | ✅      |
-
----
-
-# 🚧 Future Improvements
-
-Potential improvements include:
-
-* [ ] Advanced handwriting recognition models
-* [ ] Telugu / Hindi / regional-language OCR
-* [ ] Automatic land-owner name extraction
-* [ ] Survey number detection
-* [ ] Village / Mandal / District metadata extraction
-* [ ] Automatic document classification
-* [ ] Duplicate document detection
-* [ ] OCR confidence scoring
-* [ ] Version history for corrections
-* [ ] Digital signatures
-* [ ] Government authentication integration
-* [ ] Role-based access control
-* [ ] Audit logs
-* [ ] Production-grade authentication
-* [ ] Cloud deployment
-
----
-
-# 🤝 Contributing
-
-Contributions are welcome.
-
-### 1. Fork the repository
-
-```bash
-git fork https://github.com/your-username/intelligent-land-records.git
-```
-
-### 2. Create a feature branch
-
-```bash
-git checkout -b feature/your-feature
-```
-
-### 3. Commit your changes
-
-```bash
-git add .
-
-git commit -m "Add your feature"
-```
-
-### 4. Push the branch
-
-```bash
-git push origin feature/your-feature
-```
+* **Identifiers:** Registration / ULPIN Numbers, Khata Numbers, Survey / Gat Numbers
+* **Geography:** Districts, Mandals, Tehsils, Villages
+* **Details:** Landholder / Occupant Names, Total Extents / Area
+* **Timestamps:** Dates of Issue
 
 
 
-## ⭐ Support the Project
-
-If you find this project useful, consider giving the repository a ⭐ on GitHub.
