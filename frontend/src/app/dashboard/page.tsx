@@ -1,77 +1,138 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
-import { useRouter } from 'next/navigation';
-import { FileText, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
-import { UserProfile } from '../../lib/types';
+import { CheckCircle2, Clock, Activity, FileDigit, ArrowRight } from 'lucide-react';
 
-export default function DashboardPage() {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+export default function DashboardOverview() {
+  const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
 
   useEffect(() => {
-    async function getSession() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.push('/');
-        return;
-      }
-      const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-      setProfile(data);
-      setLoading(false);
-    }
-    getSession();
-  }, [router]);
+    fetchDocuments();
 
-  if (loading) return <div className="min-h-[calc(100vh-5rem)] flex items-center justify-center bg-slate-50 text-slate-400">Loading workspace...</div>;
+    // Realtime Subscription for Live Progress Updates
+    const channel = supabase
+      .channel('realtime-dashboard-progress')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'documents' },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            setDocuments((currentDocs) => currentDocs.filter((doc) => doc.id !== payload.old.id));
+          } else if (payload.eventType === 'UPDATE') {
+            setDocuments((currentDocs) =>
+              currentDocs.map((doc) => (doc.id === payload.new.id ? payload.new : doc))
+            );
+          } else if (payload.eventType === 'INSERT') {
+            setDocuments((currentDocs) => [payload.new, ...currentDocs]);
+          }
+        }
+      )
+      .subscribe();
 
-  const stats = [
-    { label: 'Total Documents', value: '1,248', icon: FileText, color: 'from-blue-500 to-cyan-400', bg: 'bg-blue-500/10', text: 'text-blue-500' },
-    { label: 'Pending Review', value: '42', icon: Clock, color: 'from-amber-400 to-orange-400', bg: 'bg-amber-500/10', text: 'text-amber-500' },
-    { label: 'Verified Records', value: '1,105', icon: CheckCircle2, color: 'from-emerald-400 to-teal-400', bg: 'bg-emerald-500/10', text: 'text-emerald-500' },
-    { label: 'AI Flagged', value: '101', icon: AlertTriangle, color: 'from-rose-400 to-red-500', bg: 'bg-rose-500/10', text: 'text-rose-500' }
-  ];
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  async function fetchDocuments() {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('documents')
+      .select('*')
+      .order('uploaded_at', { ascending: false });
+
+    if (!error && data) setDocuments(data);
+    setLoading(false);
+  }
+
+  // Calculate Progress Metrics
+  const totalDocs = documents.length;
+  const verifiedCount = documents.filter((d) => d.status === 'verified').length;
+  const pendingCount = documents.filter((d) => d.status === 'pending' || d.status === 'processing').length;
+  const extractedCount = documents.filter((d) => d.status === 'extracted').length;
+  
+  const completionPercentage = totalDocs > 0 ? Math.round((verifiedCount / totalDocs) * 100) : 0;
 
   return (
-    <div className="bg-slate-50 min-h-[calc(100vh-5rem)] p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* Welcome Header */}
-        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h2 className="text-3xl font-black text-slate-900 tracking-tight">
-              Welcome back, {profile?.full_name?.split(' ')[0]}
-            </h2>
-            <p className="text-slate-500 mt-2 font-medium">
-              {profile?.designation} • {profile?.department}
-            </p>
-          </div>
-          <div className="px-4 py-2 bg-slate-900 rounded-full">
-             <span className="text-sm font-semibold text-emerald-400 uppercase tracking-wider">
-               Role: {profile?.role.replace('_', ' ')}
-             </span>
-          </div>
-        </div>
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out max-w-6xl">
+      
+      {/* Header */}
+      <div className="mb-10">
+        <h1 className="text-4xl md:text-5xl font-serif text-black tracking-tight mb-4">
+          Digitization Progress.
+        </h1>
+        <p className="text-lg text-slate-500 font-light tracking-wide max-w-2xl">
+          Track system-wide extraction metrics and monitor your land record ingestion pipeline.
+        </p>
+      </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {stats.map((stat, idx) => (
-            <div key={idx} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
-              <div className="flex justify-between items-start">
-                <div className={`p-3 rounded-2xl ${stat.bg}`}>
-                  <stat.icon className={`w-7 h-7 ${stat.text}`} />
-                </div>
-              </div>
-              <div className="mt-6">
-                <p className="text-4xl font-black text-slate-900">{stat.value}</p>
-                <p className="text-sm font-semibold text-slate-400 uppercase tracking-wider mt-1">{stat.label}</p>
-              </div>
-            </div>
-          ))}
+      {/* OVERALL PROGRESS BAR */}
+      <div className="mb-8 p-6 bg-white border border-slate-200 shadow-sm rounded-sm">
+        <div className="flex justify-between items-end mb-3">
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">System Completion</h3>
+            <p className="text-sm font-serif italic text-slate-400 mt-1">{verifiedCount} of {totalDocs} records secured</p>
+          </div>
+          <span className="text-3xl font-mono font-bold text-black">{completionPercentage}%</span>
+        </div>
+        <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-black transition-all duration-1000 ease-out"
+            style={{ width: `${completionPercentage}%` }}
+          />
         </div>
       </div>
+
+      {/* METRIC CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="p-5 bg-white border border-slate-200 rounded-sm shadow-sm flex flex-col justify-between">
+          <div>
+            <FileDigit className="w-5 h-5 text-blue-500 mb-3" />
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Total Uploaded</h4>
+          </div>
+          <p className="text-3xl font-mono text-black mt-4">{totalDocs}</p>
+        </div>
+        
+        <div className="p-5 bg-white border border-slate-200 rounded-sm shadow-sm flex flex-col justify-between">
+          <div>
+            <Clock className="w-5 h-5 text-amber-500 mb-3" />
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Awaiting AI</h4>
+          </div>
+          <p className="text-3xl font-mono text-black mt-4">{pendingCount}</p>
+        </div>
+        
+        <div className="p-5 bg-white border border-slate-200 rounded-sm shadow-sm border-l-2 border-l-amber-500 flex flex-col justify-between">
+          <div>
+            <Activity className="w-5 h-5 text-amber-600 mb-3" />
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Needs Human Review</h4>
+          </div>
+          <p className="text-3xl font-mono text-black mt-4">{extractedCount}</p>
+        </div>
+        
+        <div className="p-5 bg-white border border-slate-200 rounded-sm shadow-sm border-l-2 border-l-emerald-500 flex flex-col justify-between">
+          <div>
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 mb-3" />
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Verified & Secured</h4>
+          </div>
+          <p className="text-3xl font-mono text-black mt-4">{verifiedCount}</p>
+        </div>
+      </div>
+
+      {/* CALL TO ACTION */}
+      <Link 
+        href="/dashboard/verified"
+        className="group inline-flex items-center justify-between w-full md:w-auto p-6 bg-slate-900 text-white rounded-sm hover:bg-black transition-colors shadow-md"
+      >
+        <div>
+          <h3 className="text-sm font-bold uppercase tracking-widest mb-1">Open Verification Queue</h3>
+          <p className="text-xs text-slate-400 font-light">Process pending documents and run AI extraction.</p>
+        </div>
+        <ArrowRight className="w-5 h-5 ml-8 group-hover:translate-x-1 transition-transform" />
+      </Link>
+
     </div>
   );
 }
