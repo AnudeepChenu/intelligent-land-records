@@ -73,13 +73,24 @@ class ProcessRequest(BaseModel):
 @app.post("/process")
 async def process_document(request: ProcessRequest):
     try:
-        reader = get_ocr_reader(request.language)
+        document_id = request.document_id.strip()
+        if not document_id:
+            raise HTTPException(status_code=400, detail="document_id is required")
 
-        doc_res = supabase.table('documents').select('*').eq('id', request.document_id).execute()
-        if not doc_res.data: raise HTTPException(status_code=404, detail="Not found")
+        print(f"DEBUG: Looking for exactly this ID -> '{document_id}'")
+
+        doc_res = supabase.table('documents').select('*').eq('id', document_id).execute()
+        print(f"DEBUG: Supabase returned: {doc_res.data}")
+        if not doc_res.data:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Document '{document_id}' was not found in the configured Supabase project",
+            )
+
+        reader = get_ocr_reader(request.language)
         
         document = doc_res.data[0]
-        supabase.table('documents').update({'status': 'processing'}).eq('id', request.document_id).execute()
+        supabase.table('documents').update({'status': 'processing'}).eq('id', document_id).execute()
 
         file_data = supabase.storage.from_('land_records').download(document['file_path'])
         
@@ -139,7 +150,7 @@ async def process_document(request: ProcessRequest):
 
         # Upload annotated image to Supabase
         _, buffer = cv2.imencode('.jpg', final_img)
-        annotated_path = f"{document['uploader_id']}/{request.document_id}_annotated.jpg"
+        annotated_path = f"{document['uploader_id']}/{document_id}_annotated.jpg"
         
         try: supabase.storage.from_('land_records').remove([annotated_path])
         except: pass
@@ -157,13 +168,15 @@ async def process_document(request: ProcessRequest):
             'extracted_text': extracted_text,
             'overall_confidence': overall_confidence,
             'structured_data': structured_data
-        }).eq('id', request.document_id).execute()
+        }).eq('id', document_id).execute()
 
         return {
             "status": "success", "structured_data": structured_data, "overall_confidence": overall_confidence
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error: {str(e)}")
-        supabase.table('documents').update({'status': 'rejected'}).eq('id', request.document_id).execute()
+        supabase.table('documents').update({'status': 'rejected'}).eq('id', request.document_id.strip()).execute()
         raise HTTPException(status_code=500, detail=str(e))
